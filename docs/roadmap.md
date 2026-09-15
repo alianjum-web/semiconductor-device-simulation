@@ -1,0 +1,171 @@
+# Sprint Roadmap
+
+Five sprints. Each has a fixed goal, a fixed deliverable set, and a gate
+that must pass before the next sprint begins. See `project_manual.md` for
+the physics and scope decisions referenced below.
+
+Status legend: `[ ]` not started · `[~]` in progress · `[x]` done (gate passed)
+
+---
+
+## Sprint 0 — Environment + scientific baseline
+
+**Status:** `[x]`
+
+Goal: a fully reproducible computational environment, proven end to end on
+a trivial device before any MOSFET work starts.
+
+Deliverables:
+- Python virtual environment, pinned `requirements.txt`
+- DEVSIM installed and importable
+- NumPy / SciPy / Matplotlib / Pandas installed
+- `scripts/setup.sh` that reproduces the environment from a clean clone
+- One trivial DEVSIM simulation (e.g. a resistor or a simple diode) run to
+  completion, with output saved to `results/raw/` and a plot in
+  `results/figures/`
+
+**Gate:** running `scripts/setup.sh` then the Sprint 0 smoke-test script
+produces a numerical result and a saved plot, with no manual intervention,
+on the 8 GB target machine.
+
+**Result:** passed on Ubuntu 24.04, Python 3.12, DEVSIM 2.11.0. The
+zero-bias solve gives a uniform 0.4173 V potential across the bar, matching
+the analytical built-in-contact potential `V_t * ln(N_D / n_i)` for
+N_D = 1e17 cm⁻³ at 300 K (≈ 0.4167 V). Output: `results/raw/sprint0_smoke_test.csv`,
+`results/figures/sprint0_smoke_test.png`. Note: because this model is
+"potential only" (electrostatics without carrier transport, deliberately —
+see `project_manual.md` §2), the applied bias drops almost entirely at the
+cathode node rather than linearly across the bar; a real resistive drop
+requires the drift-diffusion current model introduced in Sprint 1.
+
+---
+
+## Sprint 1 — Semiconductor physics validation
+
+**Status:** `[x]`
+
+Goal: build and validate the physics foundation using a PN junction as the
+test case, before trusting the same machinery for a MOSFET.
+
+Deliverables (`src/physics/`):
+- `constants.py` — physical constants (q, k_B, ε₀, ε_Si, ε_ox, n_i, etc.)
+- `semiconductor.py` — carrier concentration, Fermi level, built-in
+  potential helpers
+- `doping.py` — doping profile generation utilities
+- `analytical_pnjunction.py` — analytical depletion width, built-in
+  potential, I-V for a PN junction
+- `validation.py` — compares DEVSIM's numerical PN-junction result against
+  the analytical prediction
+
+**Gate:** numerical PN-junction results match analytical predictions within
+a pre-defined, documented tolerance (recorded in `docs/validation.md`).
+
+**Result:** passed. Built-in potential matches analytical to a relative
+error of 7.2e-14 (tolerance was 1e-3); forward-bias ideality factor ≈ 1.01
+across 0.1–0.45 V (tolerance ±5% around 1.0). Full detail, including a
+constant-definition pitfall found and fixed along the way, in
+`docs/validation.md`. Driver: `simulations/pnjunction/run_pn_junction.py`.
+Physics code: `src/physics/{constants,semiconductor,doping,analytical_pnjunction,validation}.py`,
+covered by `tests/test_physics.py`.
+
+---
+
+## Sprint 2 — 2D MOSFET construction
+
+**Status:** `[x]`
+
+Goal: build the baseline 2D planar MOSFET device: geometry, doping,
+contacts, mesh, and physics models, then produce first I-V curves.
+
+Deliverables (`src/device/`, `src/simulation/`):
+- Geometry: gate/oxide/source/drain/channel/body regions
+- Doping profile assignment per region
+- Contacts and boundary conditions
+- Mesh with refinement near the channel/junctions
+- Poisson + drift-diffusion + continuity equations wired up in DEVSIM
+- First simulations: zero/low bias, then V_D sweep, then V_G sweep
+
+**Gate:** the baseline MOSFET produces physically sensible I_D–V_G and
+I_D–V_D curves, potential and carrier-density distributions that match
+expected qualitative device behavior (no divergence, no unphysical sign
+flips, monotonic characteristics where expected).
+
+**Result:** passed. Baseline NMOS: L = 1 um, t_ox = 10 nm, N_A = 1e17 cm⁻³
+(channel), N_D = 1e20 cm⁻³ (source/drain), 300 K — all simulation inputs
+(`src/device/mosfet_geometry.py` `MOSFETParams` defaults). Structured
+(non-triangular) 2D mesh built with DEVSIM's own box mesher, following the
+pattern in DEVSIM's own bundled MOSFET test example; ideal metal gate on
+top of the oxide (`CreateOxideContact`, no separate polysilicon-gate
+region). I_D–V_D at V_G = 1.0 V shows a clean triode-to-saturation
+transition; I_D–V_G at V_D = 0.05 V shows a clean subthreshold exponential
+into strong inversion across ~11 decades; mid-channel surface electron
+density rises from 9.2e6 cm⁻³ (equilibrium) to 9.6e17 cm⁻³ (V_G = 1.0 V),
+confirming a real inversion channel forms under the gate rather than just
+producing monotonic curves by coincidence. All currents finite, both I-V
+curves monotonic non-decreasing (within numerical noise), I_ON > I_OFF.
+Full detail in `docs/validation.md`. Driver:
+`simulations/baseline_mosfet/run_baseline_mosfet.py`. Device/physics code:
+`src/device/mosfet_geometry.py`, `src/device/mosfet_doping.py`,
+`src/simulation/mosfet_solver.py`, covered by `tests/test_mosfet_doping.py`.
+Quantitative V_TH/g_m/SS extraction is Sprint 3 scope, not done here.
+
+---
+
+## Sprint 3 — Device characterization + parameter study
+
+**Status:** `[ ]`
+
+Goal: turn the working baseline device into a systematic parameter study.
+
+Deliverables (`src/extraction/`, `simulations/{channel_length,oxide_thickness,doping}/`):
+- Automated extraction: V_TH, I_ON, I_OFF, g_m, SS, I_ON/I_OFF
+- Sweep A: channel length (3 values)
+- Sweep B: oxide thickness (3 values)
+- Sweep C: channel doping (3 values)
+- Each sweep's results saved as CSV under `results/processed/` with plots
+  under `results/figures/`
+
+**Gate:** all three sweeps run to completion, extracted metrics are
+internally consistent (e.g. V_TH shifts in the expected direction with
+doping), and results are reproducible on rerun.
+
+---
+
+## Sprint 4 — Low-power optimization + result synthesis
+
+**Status:** `[ ]`
+
+Goal: answer the research question from `project_manual.md` §1 using the
+Sprint 3 data.
+
+Deliverables (`src/optimization/`):
+- A documented, weighted trade-off score combining I_ON, I_OFF, and g_m
+  (weights and normalization finalized against actual Sprint 3 ranges, not
+  chosen in advance)
+- A results table comparing baseline vs. each swept configuration against
+  that score
+- Written interpretation in `docs/` of which configuration(s) favor a
+  low-power trade-off and why, grounded only in the simulated data
+
+**Gate:** the optimization conclusion is fully traceable to Sprint 3 CSV
+data — no numbers introduced that don't come from a saved simulation
+result.
+
+---
+
+## Sprint 5 — Validation + documentation packaging
+
+**Status:** `[ ]`
+
+Goal: stress-test the whole pipeline and finish the documentation set.
+
+Deliverables:
+- Mesh-sensitivity check (does refining the mesh change results materially?)
+- Parameter-sensitivity / numerical-stability notes
+- Independent rerun from a clean environment to confirm reproducibility
+- `docs/validation.md`, `docs/limitations.md` filled in
+- Final figure set exported to `results/figures/`
+- `CITATION.cff`, finalized `requirements.txt`
+
+**Gate:** a clean clone + `scripts/setup.sh` + the run scripts reproduce
+the Sprint 3/4 headline results without manual fixes.

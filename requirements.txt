@@ -1,0 +1,6 @@
+devsim
+numpy
+scipy
+matplotlib
+pandas
+pytest
