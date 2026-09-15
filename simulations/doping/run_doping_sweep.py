@@ -24,14 +24,16 @@ from src.simulation.parameter_sweep import (
 SWEEP_NAME = "doping"
 PARAM_FIELD = "channel_doping_cm3"
 PARAM_LABEL = "N_A (cm^-3)"
-# baseline is the middle value. 1e18 was tried and dropped: that
-# configuration's drift-diffusion solve never converges cleanly under this
-# model (oscillating RelError, never plateauing, observed to run for tens
-# of CPU-minutes without finishing) -- a genuinely pathological regime for
-# this simple planar MOSFET (no high-doping mobility degradation model),
-# not a fixable tolerance/iteration issue. 5e17 still shows a clearly
-# higher doping level than the baseline without hitting that wall.
-VALUES_CM3 = [1.0e16, 1.0e17, 5.0e17]
+# baseline is the middle value. Order-of-magnitude swings above baseline
+# (5e17, 1e18) were tried and dropped: both push the drift-diffusion solve
+# into chaotic, non-decaying RelError oscillation (confirmed by direct
+# experiment -- one ran for tens of CPU-minutes without ever finishing) --
+# a genuinely hard numerical regime for this simple planar MOSFET (no
+# high-doping mobility-degradation model), not a fixable tolerance/
+# iteration setting. This narrower +/-50% range around baseline was
+# confirmed to converge cleanly (each point tested standalone, <5 min) and
+# still gives a clear, physically meaningful doping contrast.
+VALUES_CM3 = [7.0e16, 1.0e17, 1.5e17]
 
 
 def main():

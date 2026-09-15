@@ -113,7 +113,7 @@ Quantitative V_TH/g_m/SS extraction is Sprint 3 scope, not done here.
 
 ## Sprint 3 — Device characterization + parameter study
 
-**Status:** `[ ]`
+**Status:** `[x]`
 
 Goal: turn the working baseline device into a systematic parameter study.
 
@@ -128,6 +128,35 @@ Deliverables (`src/extraction/`, `simulations/{channel_length,oxide_thickness,do
 **Gate:** all three sweeps run to completion, extracted metrics are
 internally consistent (e.g. V_TH shifts in the expected direction with
 doping), and results are reproducible on rerun.
+
+**Result:** passed. Extraction implemented in `src/extraction/mosfet_metrics.py`
+(V_TH by linear extrapolation at peak g_m, g_m by numerical differentiation,
+SS by log-linear fit in the subthreshold region, I_ON/I_OFF at the exact
+`docs/physics.md` sec 7 bias points), covered by `tests/test_extraction.py`
+(6 tests against synthetic curves). `src/simulation/characterization.py`
+and `src/simulation/parameter_sweep.py` run one full characterization per
+swept value, reusing `mosfet_geometry.py`/`mosfet_doping.py`/
+`mosfet_solver.py` unchanged except where noted in `docs/HANDOFF.md`'s
+Sprint 3 gotchas. All three sweeps' gates passed:
+
+| Sweep | Values | V_TH (V) | I_ON (A/cm) | Direction check |
+|---|---|---|---|---|
+| Channel length L (cm) | 5e-5, 1e-4 (baseline), 2e-4 | 0.962, 0.987, 0.997 | 1.72e-2, 5.31e-3, 2.23e-3 | I_ON strictly decreases with L: PASS |
+| Oxide thickness t_ox (cm) | 5e-7, 1e-6 (baseline), 2e-6 | 0.778, 0.987, 1.337 | 1.01e-1, 5.31e-3, 1.63e-7 | V_TH strictly increases, I_ON strictly decreases with t_ox: PASS |
+| Channel doping N_A (cm⁻³) | 7e16, 1e17 (baseline), 1.5e17 | 0.905, 0.987, 1.096 | 1.65e-2, 5.31e-3, 4.90e-4 | V_TH strictly increases with N_A: PASS |
+
+The doping sweep's high value was narrowed from an original 1e18 (and then
+5e17) to 1.5e17 -- both larger jumps push this device's drift-diffusion
+solve into chaotic, non-converging Newton oscillation (not a fixable
+tolerance/iteration setting; see `docs/HANDOFF.md` and
+`docs/limitations.md`). Each sweep also reran its baseline point from a
+fresh DEVSIM session and confirmed the key metrics matched to `rtol=1e-6`
+("reproducible on rerun": PASS for all three). Full detail in
+`docs/validation.md`. Raw/processed data:
+`results/raw/{channel_length,oxide_thickness,doping}_sweep_id_vg.csv`,
+`results/processed/{same}_sweep_metrics.csv`,
+`{same}_sweep_gate_summary.csv`. Figures:
+`results/figures/{same}_sweep_metrics.png`, `{same}_sweep_id_vg.png`.
 
 ---
 

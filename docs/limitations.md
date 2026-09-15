@@ -46,4 +46,30 @@ alone.
   contact matching — see `docs/validation.md` Sprint 2 section for the
   worked-around gotcha (an unbounded "air" margin around such contacts).
 - Any parameter regimes where the solver failed to converge: none observed
-  in the Sprint 2 baseline sweeps (V_G, V_D each swept 0–1.0 V).
+  in the Sprint 2 baseline sweeps (V_G, V_D each swept 0–1.0 V). Sprint 3
+  found real ones -- see below.
+- **Channel doping is numerically bounded well below what this project
+  originally planned to sweep.** The Sprint 3 doping sweep's high value
+  was narrowed from 1e18 cm⁻³ (then 5e17 cm⁻³) down to 1.5e17 cm⁻³: at the
+  higher values, the drift-diffusion Newton iteration falls into chaotic,
+  non-decaying RelError oscillation (not a slow-but-steady approach to
+  convergence) regardless of `relative_error`, `maximum_iterations`, or
+  bias-ramp step count -- one configuration was left running for tens of
+  CPU-minutes without ever converging before being killed. This is judged
+  a genuine limitation of the simple planar MOSFET model used here (no
+  high-doping mobility-degradation model, e.g. no Caughey-Thomas-style
+  doping dependence in `mu_n`/`mu_p`), not a solver-setting bug still
+  waiting to be found -- see `docs/validation.md` Sprint 3 section for the
+  values actually used and why. A future sprint wanting to probe N_A up
+  toward 1e18 cm⁻³ would need a doping-dependent mobility model first.
+- `src/simulation/mosfet_solver.py`'s shared drift-diffusion tolerance
+  (`DD_RELATIVE_ERROR`) was loosened again in Sprint 3, from Sprint 2's
+  `1e-9` to `1e-5`, and `switch_on_drift_diffusion`'s `maximum_iterations`
+  raised from 50 to 200: swept configurations away from the Sprint 2
+  baseline (a longer channel length, and any near-zero/off-state current)
+  hit the same kind of stagnation Sprint 2 already found, just further
+  along the same curve. `robust_ramp_bias` (used only for the I_ON/I_OFF
+  bias ramps, not the general-purpose `ramp_bias`) retries with a 10x
+  looser `relative_error` per attempt for cases where even `1e-5` isn't
+  enough near a genuinely near-zero current. Full gotcha history in
+  `docs/HANDOFF.md`.

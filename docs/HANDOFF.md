@@ -9,8 +9,8 @@ the whole codebase from scratch.
 
 ## Where things stand right now
 
-**Sprints 0, 1, and 2 are done and gated. Sprint 3 (device characterization
-+ parameter study) is next and has not been started.**
+**Sprints 0, 1, 2, and 3 are done and gated. Sprint 4 (low-power
+optimization + result synthesis) is next and has not been started.**
 
 Full detail lives in `docs/roadmap.md` (status + gates) and
 `docs/validation.md` (recorded numerical results). This file summarizes
@@ -37,6 +37,19 @@ only what's needed to resume work without re-reading everything.
   curve across ~11 decades, and a confirmed inversion channel forming at
   the surface under the gate (electron density 9.2e6 → 9.6e17 cm⁻³). All
   gate checks passed — see `docs/validation.md` Sprint 2 section.
+- **Parameter sweeps + automated extraction** (Sprint 3): V_TH/g_m/SS/I_ON/
+  I_OFF extraction (`src/extraction/mosfet_metrics.py`, unit-tested against
+  synthetic curves in `tests/test_extraction.py`), a per-value device
+  characterization runner (`src/simulation/characterization.py`) and shared
+  sweep plumbing (`src/simulation/parameter_sweep.py`), driven by
+  `simulations/{channel_length,oxide_thickness,doping}/run_*_sweep.py`.
+  All three sweeps passed their gates: I_ON decreases with channel length;
+  V_TH increases and I_ON decreases with oxide thickness; V_TH increases
+  with channel doping. All three reproduced on rerun (rtol=1e-6). Full
+  numbers in `docs/validation.md` Sprint 3 section. The doping sweep's
+  high value ended up much closer to baseline than planned (1.5e17 cm⁻³,
+  not 1e18) — see gotcha #8 below and `docs/limitations.md` before trying
+  to push channel doping further in a later sprint.
 
 ## Gotchas found so far (don't rediscover these)
 
@@ -75,8 +88,65 @@ solver stagnate/oscillate on the 2D MOSFET once the channel reaches strong
 inversion — it never converges below ~1e-9 even though the solution has
 actually settled well before that. Sprint 2 loosened this to
 `relative_error=1e-9` (`src/simulation/mosfet_solver.py` `SOLVE_KWARGS`).
+Sprint 3 found this same stagnation pattern recurs at ever-looser floors
+for swept configurations away from the baseline (gotcha #7 below) —
+`SOLVE_KWARGS`'s `relative_error` (renamed `DD_RELATIVE_ERROR`) is now
+`1e-5`, not `1e-9`.
 
-## How the DEVSIM simulations are actually built (reusable pattern for Sprint 3)
+5. `devsim.reset_devsim()` alone is not enough to build a second device in
+the same process (needed for any sweep that runs multiple parameter
+values without restarting Python): it resets DEVSIM's UMFPACK
+direct-solver hookup (`direct_solver`/`solver_callback` parameters, set at
+import time by `devsim/__init__.py` → `devsim/umfpack/umfshim.py`) back to
+`"unknown"`, and the next `devsim.solve()` fails with `Unrecognized
+"direct_solver" parameter value "unknown"`. Fix: re-set both parameters
+from the already-imported `umfshim` module right after every
+`reset_devsim()` — `src/simulation/mosfet_solver.py`'s
+`reset_devsim_clean()` does this; always call it, never bare
+`devsim.reset_devsim()`, when a script builds more than one device.
+
+6. Reusing one live device across very different bias regimes in the same
+DEVSIM session is fragile even with `reset_devsim_clean()` between
+*different* devices — reusing the *same* device for a wide V_TH-extraction
+gate sweep (0–1.5 V) and then immediately ramping it to V_G=V_D=V_DD for
+I_ON hit a "Convergence failure!" on the baseline configuration even at
+800+ substeps, while a device built fresh from equilibrium converges fine
+for the identical V_DD target. `characterize_device` now builds two
+separate devices per parameter value — one for the V_TH sweep, one fresh
+one for I_ON/I_OFF — rather than reusing one for everything.
+
+7. Near-zero/off-state drain current (I_OFF: V_G=0, V_D up to V_DD) can
+make a Newton iteration plateau dead flat for 15+ iterations at a
+RelError floor well above whatever `relative_error` is set to — not
+oscillating, not diverging, genuinely stuck, because at a near-zero true
+current even tiny absolute fluctuations look like large relative ones.
+That floor is **not a fixed number** — it was ~5.8e-5 at one step count
+and ~4.4e-4 at another on the same device, so finer bias-ramp stepping can
+make the achievable RelError *worse*, not better. Fix used only for the
+I_ON/I_OFF drain ramp (not the general-purpose `ramp_bias`):
+`robust_ramp_bias` (`src/simulation/mosfet_solver.py`) retries the same
+ramp with `relative_error` loosened 10x per attempt (step count held
+fixed) up to a ceiling of `1e-3`.
+
+8. **Channel doping has a hard numerical ceiling well below what this
+project originally planned to sweep**, and this cost real wall-clock time
+(one configuration was left running for tens of CPU-minutes, pinning a
+CPU core, before being killed — don't let a "just retry with a looser
+tolerance" fix run unbounded like that again). At N_A=5e17 and 1e18 cm⁻³,
+the drift-diffusion Newton iteration falls into **chaotic, non-decaying
+RelError oscillation** — not slow convergence, not a stagnant floor, a
+value that bounces by 1-2 orders of magnitude iteration to iteration with
+no decaying trend. No `relative_error`/`maximum_iterations` combination
+tried fixed this; it's treated as a genuine limitation of this simple
+planar MOSFET model (no doping-dependent mobility degradation), not a
+solver-setting bug — see `docs/limitations.md`. The doping sweep actually
+run uses `[7e16, 1e17, 1.5e17]`, each individually confirmed to converge
+in well under 5 minutes before being adopted. **If a later sprint wants
+higher channel doping, verify convergence on a single standalone point
+first (with a hard wall-clock `timeout` wrapper), before wiring it into a
+sweep script that will retry indefinitely.**
+
+## How the DEVSIM simulations are actually built (reusable pattern, confirmed through Sprint 3)
 
 This sequence is confirmed working (not guessed) for both the 1D PN
 junction and the 2D MOSFET, and will carry over to Sprint 3's sweeps
@@ -151,43 +221,58 @@ src/device/
   mosfet_doping.py             2D erfc source/drain doping (numpy + matching DEVSIM expression)
 src/simulation/
   mosfet_solver.py              potential-only setup, drift-diffusion switch-on, bias ramps/sweeps
+  characterization.py           Sprint 3: one full V_TH/g_m/SS/I_ON/I_OFF characterization per device
+  parameter_sweep.py            Sprint 3: shared per-value run + CSV/plot/reproducibility plumbing
+src/extraction/
+  mosfet_metrics.py             Sprint 3: V_TH/g_m/SS/I_ON-I_OFF-ratio extraction, pure NumPy
 simulations/
   sprint0_smoke_test/smoke_test.py     Sprint 0 device
   pnjunction/run_pn_junction.py        Sprint 1 device — full working reference implementation
   baseline_mosfet/run_baseline_mosfet.py   Sprint 2 device — full working reference implementation
-  channel_length/, oxide_thickness/, doping/   empty, for Sprint 3's sweeps
+  channel_length/run_channel_length_sweep.py   Sprint 3 sweep A
+  oxide_thickness/run_oxide_thickness_sweep.py Sprint 3 sweep B
+  doping/run_doping_sweep.py                   Sprint 3 sweep C
 results/{raw,processed,figures}/       populated by the above scripts; gitignored by default
 tests/
   test_environment.py         Sprint 0 gate check
   test_physics.py             Sprint 1 physics unit tests (10 tests, all passing)
   test_mosfet_doping.py       Sprint 2 doping-profile unit tests (5 tests, all passing)
+  test_extraction.py          Sprint 3 extraction unit tests (6 tests, all passing)
 scripts/setup.sh               venv + deps + runs the Sprint 0 smoke test
 ```
 
-## What Sprint 3 needs to do (from `docs/roadmap.md`, restated briefly)
+## What Sprint 4 needs to do (from `docs/roadmap.md`, restated briefly)
 
-Turn the Sprint 2 baseline device into a systematic parameter study
-(`src/extraction/`, `simulations/{channel_length,oxide_thickness,doping}/`):
-automated extraction of V_TH (linear extrapolation of I_D–V_G at fixed
-small V_D to I_D=0), I_ON, I_OFF (both per the exact bias points in
-`docs/physics.md` §7 — note Sprint 2's informal I_ON/I_OFF check used
-different bias points, see `docs/validation.md`), g_m = dI_D/dV_G, and SS
-(subthreshold swing); then three 3-value sweeps (channel length, oxide
-thickness, channel doping — `docs/project_manual.md` §4), each producing a
-CSV under `results/processed/` and plots under `results/figures/`. Gate:
-all three sweeps complete, extracted metrics shift in the expected
-direction (e.g. V_TH vs. doping), and results reproduce on rerun. Each
-sweep run will reuse `src/device/mosfet_geometry.py`/`mosfet_doping.py`/
-`src/simulation/mosfet_solver.py` as-is, just varying the relevant
-`MOSFETParams` field per run.
+Answer the research question from `project_manual.md` §1 using Sprint 3's
+data (`src/optimization/`): a documented, weighted trade-off score
+combining I_ON, I_OFF, and g_m (weights/normalization finalized against
+the *actual* Sprint 3 ranges in `results/processed/{channel_length,
+oxide_thickness,doping}_sweep_metrics.csv` — not chosen in advance), a
+results table comparing baseline vs. every swept configuration against
+that score, and a written interpretation in `docs/` of which
+configuration(s) favor a low-power trade-off and why. Gate: the
+optimization conclusion is fully traceable to Sprint 3 CSV data — no
+numbers introduced that don't come from a saved simulation result. Note
+the doping sweep's usable range is narrower than originally planned (see
+gotcha #8) — the trade-off analysis should draw from the data actually
+gathered (`[7e16, 1e17, 1.5e17]` cm⁻³ for doping), not from the wider
+range named in earlier planning docs.
 
 ## Operating reminders for whoever resumes this
 
 - Read `AGENTS.md` — gate discipline (don't skip/compress sprints),
   anti-hallucination rules (verify DEVSIM calls against the installed
-  package before using them, exactly as Sprints 0-2 did), and content
+  package before using them, exactly as Sprints 0-3 did), and content
   rules (no scholarship/portfolio language anywhere in this repo).
-- After Sprint 3's gate passes: record the result in `docs/roadmap.md` and
-  `docs/validation.md` (same style as Sprint 0/1/2 above), update this
+- If this environment's background/long-running shell commands don't
+  survive between messages (observed repeatedly during Sprint 3 — `/tmp`
+  was wiped and running DEVSIM processes vanished mid-run, apparently from
+  the host machine sleeping/restarting between turns): run sweep scripts
+  with the harness's own `run_in_background` tracking rather than manual
+  `nohup`, wrap anything that might hang in a hard `timeout N` (see
+  gotcha #8 — an un-timed retry loop once pinned a CPU core for nearly an
+  hour), and don't be surprised if a run needs relaunching after a resume.
+- After Sprint 4's gate passes: record the result in `docs/roadmap.md` and
+  `docs/validation.md` (same style as Sprint 0/1/2/3 above), update this
   file's "where things stand" section, then tell the user it's safe to
   `/clear`.

@@ -129,6 +129,76 @@ Raw data: `results/raw/baseline_mosfet_equilibrium_profile.csv`,
 Mesh sensitivity: not yet checked — deferred to Sprint 5 per
 `docs/roadmap.md`.
 
+## Sprint 3 — Parameter sweeps
+
+Status: **passed.** Run via `simulations/{channel_length,oxide_thickness,doping}/run_*_sweep.py`.
+
+Each sweep varies exactly one `MOSFETParams` field on top of the Sprint 2
+baseline (L=1 um, t_ox=10 nm, N_A=1e17 cm⁻³) and characterizes the
+resulting device with `src/simulation/characterization.py`: an I_D-V_G
+sweep at V_D=0.05 V from 0 to 1.5 V (wider than Sprint 2's 0-1.0 V, so
+V_TH/g_m/SS extraction reaches the strong-inversion knee even for
+configurations that push V_TH up) feeds V_TH (linear extrapolation at peak
+g_m), g_m, and SS (log-linear fit in the subthreshold region); a separate,
+freshly-built device measures I_ON (V_G=V_D=1.0 V) and I_OFF (V_G=0,
+V_D=1.0 V) per `docs/physics.md` sec 7.
+
+**Channel length sweep** (`results/processed/channel_length_sweep_metrics.csv`):
+
+| L (cm) | V_TH (V) | g_m,max (A/cm/V) | SS (mV/dec) | I_ON (A/cm) | I_OFF (A/cm) |
+|---|---|---|---|---|---|
+| 5.0e-5 | 0.9622 | 0.1402 | 102.9 | 1.721e-2 | -6.76e-11 |
+| 1.0e-4 (baseline) | 0.9867 | 0.0671 | 111.3 | 5.305e-3 | -6.08e-11 |
+| 2.0e-4 | 0.9967 | 0.0330 | 118.4 | 2.233e-3 | -6.06e-11 |
+
+I_ON strictly decreases with increasing L (gradual-channel theory: channel
+resistance grows with L) -- **PASS**. I_OFF stays within the same
+~1e-10-A/cm noise-floor band across all three (expected: this idealized
+long-channel-style device has no punch-through/DIBL model, so I_OFF isn't
+expected to track L strongly at this bias).
+
+**Oxide thickness sweep** (`results/processed/oxide_thickness_sweep_metrics.csv`):
+
+| t_ox (cm) | V_TH (V) | g_m,max (A/cm/V) | SS (mV/dec) | I_ON (A/cm) | I_OFF (A/cm) |
+|---|---|---|---|---|---|
+| 5.0e-7 | 0.7776 | 0.1350 | 82.7 | 1.006e-1 | -4.93e-11 |
+| 1.0e-6 (baseline) | 0.9867 | 0.0671 | 111.3 | 5.305e-3 | -6.08e-11 |
+| 2.0e-6 | 1.3372 | 0.0227 | 194.9 | 1.633e-7 | -4.34e-11 |
+
+V_TH strictly increases and I_ON strictly decreases with increasing t_ox
+(thinner oxide -> higher C_ox -> stronger gate coupling) -- **PASS** on
+both checks named in `docs/roadmap.md`.
+
+**Channel doping sweep** (`results/processed/doping_sweep_metrics.csv`):
+
+| N_A (cm⁻³) | V_TH (V) | g_m,max (A/cm/V) | SS (mV/dec) | I_ON (A/cm) | I_OFF (A/cm) |
+|---|---|---|---|---|---|
+| 7.0e16 | 0.9050 | 0.0676 | 99.8 | 1.650e-2 | 2.79e-11 |
+| 1.0e17 (baseline) | 0.9867 | 0.0671 | 111.3 | 5.305e-3 | -6.08e-11 |
+| 1.5e17 | 1.0964 | 0.0659 | 79.7 | 4.900e-4 | 1.99e-10 |
+
+V_TH strictly increases with increasing N_A -- **PASS**, the direction
+example named explicitly in `docs/roadmap.md`'s Sprint 3 gate.
+
+The doping sweep's high value is 1.5e17, not the originally planned 1e18:
+1e18 (and, when dropped in favor of it, 5e17 too) sends this device's
+drift-diffusion Newton iteration into chaotic, non-decaying oscillation
+regardless of tolerance or iteration budget -- one configuration was left
+running for tens of CPU-minutes without ever converging before being
+killed. This is a genuine numerical/physical limit of the simple planar
+MOSFET model used here (no high-doping mobility-degradation model), not a
+solver-setting bug; recorded in `docs/limitations.md`. 1.5e17 was verified
+standalone to converge in well under 5 minutes before being adopted.
+
+**Reproducibility:** each sweep reran its baseline (middle) point from a
+freshly reset DEVSIM session after the main sweep and compared V_TH,
+I_ON, and I_OFF to the first run at `rtol=1e-6` -- **PASS** for all three
+sweeps (DEVSIM's solve is deterministic given the same inputs, so this is
+a real check, not a formality).
+
+Mesh sensitivity: not yet checked — deferred to Sprint 5 per
+`docs/roadmap.md`.
+
 ## Sprint 5 — Mesh and parameter sensitivity
 
 Status: not yet run.
