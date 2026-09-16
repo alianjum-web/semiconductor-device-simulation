@@ -217,4 +217,67 @@ term does not resolve a physically real signal. Output:
 
 ## Sprint 5 — Mesh and parameter sensitivity
 
-Status: not yet run.
+**Mesh sensitivity** (`simulations/mesh_sensitivity/run_mesh_sensitivity.py`,
+`results/processed/mesh_sensitivity.csv`): the baseline device
+(`MOSFETParams()` defaults, same as Sprint 2) was fully re-characterized
+(same `characterize_device` code path as Sprint 3) with every mesh-line
+spacing in `src/device/mosfet_geometry.py` halved (`refine=2.0`), and
+compared against the original mesh:
+
+| Metric | Baseline mesh | 2x-refined mesh | Relative diff | Within 5%? |
+|---|---|---|---|---|
+| V_TH (V) | 0.98674 | 0.99057 | 0.39% | PASS |
+| g_m,max (A/cm/V) | 0.067097 | 0.066720 | 0.56% | PASS |
+| SS (mV/decade) | 111.26 | 110.13 | 1.02% | PASS |
+| I_ON (A/cm) | 5.305e-3 | 5.001e-3 | 5.73% | **FAIL** (just over 5%) |
+| I_OFF (A/cm) | -6.079e-11 | 4.049e-11 | 166.6% | **FAIL** (not meaningful) |
+
+V_TH, g_m, and SS are mesh-converged to well within 5% at this refinement
+level. I_ON is not fully converged at the baseline mesh density — doubling
+resolution moves it 5.7%, just over the 5% tolerance chosen for this
+check. This is a real, quantified mesh-sensitivity result, not a script
+bug: it means the baseline mesh gives I_ON accurate to roughly one part in
+twenty, not more. I_OFF's huge relative difference is not a genuine mesh
+effect — both values (-6.1e-11 and +4.0e-11 A/cm) sit inside the
+near-zero solver noise floor already documented as gotcha #7 in
+`docs/HANDOFF.md`; comparing two noise-floor values by relative difference
+is not meaningful (one is even a different sign), and no mesh refinement
+fixes that without a fundamentally different treatment of the off-state
+solve. See `docs/limitations.md` for how this bounds the confidence of
+reported I_ON/I_OFF figures.
+
+**Parameter/numerical-stability notes:** already documented in detail as
+gotchas #4, #7, #8 in `docs/HANDOFF.md` and consolidated in
+`docs/limitations.md` — Sprint 3's channel-doping ceiling (chaotic
+non-convergence above ~1.5e17 cm⁻³) and Sprint 3/4's I_OFF noise floor
+(under 1 decade of real signal) are the two dominant numerical-stability
+limits found in this project; Sprint 5 did not find new ones beyond the
+I_ON mesh-sensitivity result above.
+
+**Reproducibility (clean-environment rerun, actually performed, not
+assumed):** `.venv` was deleted entirely and rebuilt from scratch via
+`scripts/setup.sh` (pinned `requirements.txt`, Sprint 0 smoke test passed),
+then `simulations/baseline_mosfet/run_baseline_mosfet.py` was rerun in
+that fresh environment. Result: I_ON = 5.305e-3 A/cm (recorded: 5.31e-3),
+I_OFF = 3.260e-11 A/cm (recorded: 3.26e-11), equilibrium/on-state
+mid-channel electron density 9.235e6 / 9.606e17 cm⁻³ (recorded: 9.2e6 /
+9.6e17), all five Sprint 2 gate checks PASS — an exact match to the
+originally recorded Sprint 2 numbers, confirming the pinned dependency
+versions reproduce this project's DEVSIM solve deterministically from a
+wiped environment. The three Sprint 3 parameter sweeps and Sprint 4
+scoring were not separately rerun end-to-end from this same wiped `.venv`
+in this pass (each already has its own Sprint 3-recorded reproducibility
+check: a baseline-point rerun from a freshly reset DEVSIM session at
+rtol=1e-6); given the baseline device rerun above reproduces exactly under
+the pinned dependency set, and the sweeps use the identical build/solve
+code path (`src/simulation/characterization.py`) just varying one
+`MOSFETParams` field, there is no remaining untested code path between
+"baseline reproduces in a clean venv" and "sweeps reproduce in a clean
+venv."
+
+Status: **run.** Gate (mesh/parameter sensitivity checked, reproducibility
+verified): mesh sensitivity found a real, bounded (5.7%) I_ON
+sensitivity to mesh density and a non-meaningful I_OFF comparison at the
+noise floor — both recorded above and in `docs/limitations.md`, not
+silently passed. No blocking numerical issues found beyond what Sprints
+3/4 already documented.

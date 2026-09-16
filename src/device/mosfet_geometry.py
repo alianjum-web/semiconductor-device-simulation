@@ -57,10 +57,16 @@ class MOSFETParams:
     temperature_k: float = 300.0
 
 
-def build_mosfet(mesh_name: str, device_name: str, params: MOSFETParams) -> dict:
+def build_mosfet(mesh_name: str, device_name: str, params: MOSFETParams, refine: float = 1.0) -> dict:
     """Builds the 2D mesh, regions, contacts, interface, and doping for a
     planar NMOS. Returns the key x/y coordinates used (cm), for logging and
-    reuse by the solver -- not meant to be re-derived elsewhere."""
+    reuse by the solver -- not meant to be re-derived elsewhere.
+
+    `refine` (Sprint 5 mesh-sensitivity check, src/device/mosfet_geometry.py):
+    every mesh-line spacing (ns/ps) below is divided by this factor, so
+    refine=2.0 halves every spacing (roughly quadrupling node count in 2D)
+    without changing any geometry or doping. Default 1.0 reproduces the
+    exact mesh used by every prior sprint."""
     L = params.channel_length_cm
     t_ox = params.oxide_thickness_cm
     x_j = params.junction_depth_cm
@@ -95,20 +101,23 @@ def build_mosfet(mesh_name: str, device_name: str, params: MOSFETParams) -> dict
 
     devsim.create_2d_mesh(mesh=mesh_name)
 
-    devsim.add_2d_mesh_line(mesh=mesh_name, dir="y", pos=y_top_margin, ns=air_margin_cm, ps=air_margin_cm)
-    devsim.add_2d_mesh_line(mesh=mesh_name, dir="y", pos=y_gate_top, ns=t_ox / 50.0, ps=t_ox / 50.0)
-    devsim.add_2d_mesh_line(mesh=mesh_name, dir="y", pos=y_oxide_mid, ns=t_ox / 8.0, ps=t_ox / 8.0)
-    devsim.add_2d_mesh_line(mesh=mesh_name, dir="y", pos=y_surface, ns=t_ox / 50.0, ps=x_j / 20.0)
-    devsim.add_2d_mesh_line(mesh=mesh_name, dir="y", pos=y_junction, ns=x_j / 20.0, ps=x_j / 5.0)
-    devsim.add_2d_mesh_line(mesh=mesh_name, dir="y", pos=y_body_mid, ns=t_body / 10.0, ps=t_body / 10.0)
-    devsim.add_2d_mesh_line(mesh=mesh_name, dir="y", pos=y_body_bottom, ns=t_body / 50.0, ps=t_body / 50.0)
-    devsim.add_2d_mesh_line(mesh=mesh_name, dir="y", pos=y_bottom_margin, ns=air_margin_cm, ps=air_margin_cm)
+    def sp(spacing_cm: float) -> float:
+        return spacing_cm / refine
 
-    devsim.add_2d_mesh_line(mesh=mesh_name, dir="x", pos=0.0, ns=ext / 10.0, ps=ext / 10.0)
-    devsim.add_2d_mesh_line(mesh=mesh_name, dir="x", pos=x_gate_left, ns=ext / 10.0, ps=L / 50.0)
-    devsim.add_2d_mesh_line(mesh=mesh_name, dir="x", pos=0.5 * (x_gate_left + x_gate_right), ns=L / 50.0, ps=L / 50.0)
-    devsim.add_2d_mesh_line(mesh=mesh_name, dir="x", pos=x_gate_right, ns=L / 50.0, ps=ext / 10.0)
-    devsim.add_2d_mesh_line(mesh=mesh_name, dir="x", pos=x_device_right, ns=ext / 10.0, ps=ext / 10.0)
+    devsim.add_2d_mesh_line(mesh=mesh_name, dir="y", pos=y_top_margin, ns=sp(air_margin_cm), ps=sp(air_margin_cm))
+    devsim.add_2d_mesh_line(mesh=mesh_name, dir="y", pos=y_gate_top, ns=sp(t_ox / 50.0), ps=sp(t_ox / 50.0))
+    devsim.add_2d_mesh_line(mesh=mesh_name, dir="y", pos=y_oxide_mid, ns=sp(t_ox / 8.0), ps=sp(t_ox / 8.0))
+    devsim.add_2d_mesh_line(mesh=mesh_name, dir="y", pos=y_surface, ns=sp(t_ox / 50.0), ps=sp(x_j / 20.0))
+    devsim.add_2d_mesh_line(mesh=mesh_name, dir="y", pos=y_junction, ns=sp(x_j / 20.0), ps=sp(x_j / 5.0))
+    devsim.add_2d_mesh_line(mesh=mesh_name, dir="y", pos=y_body_mid, ns=sp(t_body / 10.0), ps=sp(t_body / 10.0))
+    devsim.add_2d_mesh_line(mesh=mesh_name, dir="y", pos=y_body_bottom, ns=sp(t_body / 50.0), ps=sp(t_body / 50.0))
+    devsim.add_2d_mesh_line(mesh=mesh_name, dir="y", pos=y_bottom_margin, ns=sp(air_margin_cm), ps=sp(air_margin_cm))
+
+    devsim.add_2d_mesh_line(mesh=mesh_name, dir="x", pos=0.0, ns=sp(ext / 10.0), ps=sp(ext / 10.0))
+    devsim.add_2d_mesh_line(mesh=mesh_name, dir="x", pos=x_gate_left, ns=sp(ext / 10.0), ps=sp(L / 50.0))
+    devsim.add_2d_mesh_line(mesh=mesh_name, dir="x", pos=0.5 * (x_gate_left + x_gate_right), ns=sp(L / 50.0), ps=sp(L / 50.0))
+    devsim.add_2d_mesh_line(mesh=mesh_name, dir="x", pos=x_gate_right, ns=sp(L / 50.0), ps=sp(ext / 10.0))
+    devsim.add_2d_mesh_line(mesh=mesh_name, dir="x", pos=x_device_right, ns=sp(ext / 10.0), ps=sp(ext / 10.0))
 
     # DEVSIM's box mesher triangulates the full mesh-line grid; any cell not
     # claimed by an explicit region shows up as "Triangle has no region" and

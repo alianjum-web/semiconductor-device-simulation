@@ -31,7 +31,7 @@ GATE_SWEEP_V = [round(0.05 * i, 2) for i in range(31)]  # 0 .. 1.5 V
 
 def characterize_device(mesh_name: str, device_name: str, params: MOSFETParams,
                          v_dd: float = V_DD, linear_vd: float = LINEAR_VD,
-                         gate_sweep=GATE_SWEEP_V) -> dict:
+                         gate_sweep=GATE_SWEEP_V, refine: float = 1.0) -> dict:
     """Runs the I_D-V_G linear-region sweep used for V_TH/g_m/SS
     extraction, then two extra bias points (V_G=V_D=v_dd for I_ON, V_G=0/
     V_D=v_dd for I_OFF, per docs/physics.md sec 7). Returns a dict of the
@@ -47,8 +47,11 @@ def characterize_device(mesh_name: str, device_name: str, params: MOSFETParams,
     not a step-granularity problem. A device fresh from equilibrium
     converges fine for the exact same v_dd target (this is exactly Sprint
     2's proven I_D-V_D sequence). Confirmed by direct experiment while
-    building this sweep."""
-    coords = build_mosfet(mesh_name, device_name, params)
+    building this sweep.
+
+    `refine` (Sprint 5 mesh-sensitivity check) is passed straight through
+    to build_mosfet's own `refine` -- see its docstring."""
+    coords = build_mosfet(mesh_name, device_name, params, refine=refine)
     setup_potential_only(device_name, params)
     switch_on_drift_diffusion(device_name)
 
@@ -60,7 +63,7 @@ def characterize_device(mesh_name: str, device_name: str, params: MOSFETParams,
 
     reset_devsim_clean()
     ion_device = "{0}_ion".format(device_name)
-    build_mosfet("{0}_ion".format(mesh_name), ion_device, params)
+    build_mosfet("{0}_ion".format(mesh_name), ion_device, params, refine=refine)
     setup_potential_only(ion_device, params)
     switch_on_drift_diffusion(ion_device)
 

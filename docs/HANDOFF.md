@@ -9,8 +9,8 @@ the whole codebase from scratch.
 
 ## Where things stand right now
 
-**Sprints 0, 1, 2, 3, and 4 are done and gated. Sprint 5 (validation +
-documentation packaging) is next and has not been started.**
+**All five sprints (0-5) are done and gated. The project is complete per
+`docs/roadmap.md`.**
 
 Full detail lives in `docs/roadmap.md` (status + gates) and
 `docs/validation.md` (recorded numerical results). This file summarizes
@@ -63,6 +63,21 @@ only what's needed to resume work without re-reading everything.
   alone: t_ox=2e-6 cm (20 nm) has this dataset's lowest I_ON and g_m.
   `tests/test_optimization.py` (6 tests) covers the scoring/normalization
   logic against synthetic data, no DEVSIM needed.
+
+- **Mesh sensitivity + final validation packaging** (Sprint 5):
+  `simulations/mesh_sensitivity/run_mesh_sensitivity.py` characterizes the
+  baseline device at the standard mesh and at 2x refinement
+  (`src/device/mosfet_geometry.py`'s new `refine` param, threaded through
+  `src/simulation/characterization.py`). V_TH/g_m/SS are mesh-converged to
+  <1.1%; I_ON moves 5.7% (a real, documented sensitivity — see
+  `docs/limitations.md`); I_OFF's comparison is meaningless at the
+  near-zero noise floor (gotcha #7). A genuine clean-environment check was
+  performed (not assumed): `.venv` deleted and rebuilt from
+  `scripts/setup.sh`, then `run_baseline_mosfet.py` rerun and its I_ON/
+  I_OFF/gate-checks compared against the originally recorded Sprint 2
+  numbers — exact match. `requirements.txt` now pins exact verified
+  versions. `CITATION.cff` added. Final figure set force-committed to
+  `results/figures/` (normally gitignored, committed deliberately here).
 
 ## Gotchas found so far (don't rediscover these)
 
@@ -260,6 +275,8 @@ simulations/
   channel_length/run_channel_length_sweep.py   Sprint 3 sweep A
   oxide_thickness/run_oxide_thickness_sweep.py Sprint 3 sweep B
   doping/run_doping_sweep.py                   Sprint 3 sweep C
+  mesh_sensitivity/run_mesh_sensitivity.py     Sprint 5 mesh-refinement comparison
+CITATION.cff                    Sprint 5 packaging
 results/{raw,processed,figures}/       populated by the above scripts; gitignored by default
 tests/
   test_environment.py         Sprint 0 gate check
@@ -271,21 +288,13 @@ scripts/setup.sh               venv + deps + runs the Sprint 0 smoke test
 docs/optimization.md           Sprint 4 written interpretation (result table + research-question answer)
 ```
 
-## What Sprint 5 needs to do (from `docs/roadmap.md`, restated briefly)
+## Project status: all sprints complete
 
-Stress-test and package the whole pipeline: a mesh-sensitivity check (does
-refining `mosfet_geometry.py`'s mesh change Sprint 2/3 results
-materially?), parameter-sensitivity/numerical-stability notes (a lot of
-this is already written up as gotchas #4/#7/#8 above and in
-`docs/limitations.md` — Sprint 5 should verify/consolidate, not
-necessarily rediscover), an independent rerun from a clean environment
-(`scripts/setup.sh` + the run scripts) to confirm reproducibility,
-`docs/validation.md`/`docs/limitations.md` fully filled in (both already
-have real content through Sprint 4; Sprint 5 adds its own sections rather
-than starting from scratch), a final figure set in `results/figures/`, and
-`CITATION.cff` + a finalized `requirements.txt`. Gate: a clean clone +
-`scripts/setup.sh` + the run scripts reproduce the Sprint 3/4 headline
-results without manual fixes.
+There is no next sprint. If resuming work on this repository, it is
+either a bug report/refinement on existing sprints, or a genuinely new
+scope decision — start from `docs/project_manual.md` and
+`docs/roadmap.md` to see what's already built before assuming new work is
+needed.
 
 ## Operating reminders for whoever resumes this
 

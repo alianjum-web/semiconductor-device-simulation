@@ -32,7 +32,21 @@ alone.
 
 ## Numerical limitations (to be filled in per sprint)
 
-- Mesh resolution and its effect on results: TBD (Sprint 5).
+- **Mesh resolution has a measurable, bounded effect on I_ON** (Sprint 5,
+  `docs/validation.md` Sprint 5 section, `results/processed/mesh_sensitivity.csv`):
+  doubling the baseline mesh's resolution everywhere (`refine=2.0` in
+  `src/device/mosfet_geometry.py`) moves V_TH, g_m, and subthreshold swing
+  by under 1.1% (mesh-converged), but moves I_ON by 5.7% — the baseline
+  mesh used for every reported I_ON figure in this project (Sprints 2-4)
+  is accurate to roughly one part in twenty, not tighter. This does not
+  change any qualitative finding (all Sprint 3/4 trends are multi-decade
+  effects, far larger than a 5.7% mesh uncertainty), but any reader
+  wanting I_ON to better than ~5% precision would need a finer mesh than
+  this project used. I_OFF's mesh-refinement comparison is not meaningful
+  at all: both the baseline and refined I_OFF values sit inside the
+  near-zero solver noise floor (gotcha #7 below), including a sign flip
+  between them, so no mesh refinement resolves it without a different
+  treatment of the off-state solve.
 - Convergence behavior / solver tolerances used: Sprint 1 (1D PN junction)
   converged with `relative_error=1e-10`. Sprint 2's 2D MOSFET needed this
   loosened to `relative_error=1e-9` (`src/simulation/mosfet_solver.py`

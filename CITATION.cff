@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Semiconductor Device Simulation: 2D MOSFET DEVSIM Study"
+type: software
+authors:
+  - family-names: Anjum
+    given-names: Ali
+repository-code: "https://github.com/alianjum-web/semiconductor-device-simulation"
+abstract: >-
+  Physics-based 2D planar MOSFET device simulation built on the open-source
+  DEVSIM TCAD engine, with a systematic parameter study across channel
+  length, gate oxide thickness, and channel doping, and a low-power
+  drive-current/leakage-current trade-off analysis. See
+  docs/project_manual.md for full scope.

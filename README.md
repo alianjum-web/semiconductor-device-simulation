@@ -17,11 +17,12 @@ decisions — it is the canonical reference for this project.
 
 ## Status
 
-Sprints 0 (environment + baseline) and 1 (semiconductor physics
-validation) are complete and gated — see `docs/roadmap.md` and
-`docs/validation.md` for recorded results. Sprint 2 (2D MOSFET
-construction) is next. Sprints are completed in order, each gated before
-the next starts.
+All five sprints are complete and gated: environment setup, 1D PN-junction
+physics validation, baseline 2D MOSFET construction, parameter sweeps
+(channel length, oxide thickness, channel doping) with automated V_TH/g_m/
+SS/I_ON/I_OFF extraction, low-power trade-off scoring, and final mesh-
+sensitivity/reproducibility validation. See `docs/roadmap.md` for the
+sprint-by-sprint gates and `docs/validation.md` for all recorded results.
 
 ## Repository layout
 
