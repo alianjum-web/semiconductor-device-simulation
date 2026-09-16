@@ -9,8 +9,8 @@ the whole codebase from scratch.
 
 ## Where things stand right now
 
-**Sprints 0, 1, 2, and 3 are done and gated. Sprint 4 (low-power
-optimization + result synthesis) is next and has not been started.**
+**Sprints 0, 1, 2, 3, and 4 are done and gated. Sprint 5 (validation +
+documentation packaging) is next and has not been started.**
 
 Full detail lives in `docs/roadmap.md` (status + gates) and
 `docs/validation.md` (recorded numerical results). This file summarizes
@@ -50,6 +50,19 @@ only what's needed to resume work without re-reading everything.
   high value ended up much closer to baseline than planned (1.5e17 cm⁻³,
   not 1e18) — see gotcha #8 below and `docs/limitations.md` before trying
   to push channel doping further in a later sprint.
+- **Low-power trade-off scoring** (Sprint 4): `src/optimization/tradeoff.py`
+  scores the 7 unique Sprint 3 configurations (baseline + 2 swept values
+  each for L/t_ox/N_A) on a weighted, normalized combination of I_ON,
+  I_OFF, and g_m — see `docs/optimization.md` for the full result table and
+  written interpretation, `docs/roadmap.md` Sprint 4 section for the
+  summary. Headline finding: I_OFF varies by under 1 decade across all 7
+  configurations (inside this solver's numerical noise floor — gotcha #7
+  below), so the score's leakage term doesn't resolve a real signal; the
+  ranking is driven almost entirely by I_ON and g_m, which do vary by real,
+  multi-decade margins. Best-supported low-power answer from raw I_ON/g_m
+  alone: t_ox=2e-6 cm (20 nm) has this dataset's lowest I_ON and g_m.
+  `tests/test_optimization.py` (6 tests) covers the scoring/normalization
+  logic against synthetic data, no DEVSIM needed.
 
 ## Gotchas found so far (don't rediscover these)
 
@@ -146,6 +159,19 @@ higher channel doping, verify convergence on a single standalone point
 first (with a hard wall-clock `timeout` wrapper), before wiring it into a
 sweep script that will retry indefinitely.**
 
+9. `extract_vth`'s "flat curve should raise" guard (`src/extraction/
+mosfet_metrics.py`) originally checked only `slope <= 0` after
+`np.polyfit` on a perfectly flat I_D window. On an exactly-flat curve the
+fitted slope is pure floating-point cancellation noise (~1e-24 scale here)
+whose *sign* is not stable — `tests/test_extraction.py::
+test_extract_vth_raises_on_flat_curve` passed in isolation but failed when
+run after other tests in the same `pytest` process (importing DEVSIM's
+compiled extension earlier evidently shifts which numpy SIMD code path
+gets used, flipping the noise's sign). Fixed by checking the fit window's
+actual peak-to-peak I_D range against its scale (`np.ptp(id_window) <=
+1e-9 * id_scale`) *before* trusting the fitted slope's sign — verified
+stable across repeated full-suite runs.
+
 ## How the DEVSIM simulations are actually built (reusable pattern, confirmed through Sprint 3)
 
 This sequence is confirmed working (not guessed) for both the 1D PN
@@ -225,6 +251,8 @@ src/simulation/
   parameter_sweep.py            Sprint 3: shared per-value run + CSV/plot/reproducibility plumbing
 src/extraction/
   mosfet_metrics.py             Sprint 3: V_TH/g_m/SS/I_ON-I_OFF-ratio extraction, pure NumPy
+src/optimization/
+  tradeoff.py                   Sprint 4: weighted I_ON/I_OFF/g_m trade-off score, pure Python
 simulations/
   sprint0_smoke_test/smoke_test.py     Sprint 0 device
   pnjunction/run_pn_junction.py        Sprint 1 device — full working reference implementation
@@ -238,31 +266,32 @@ tests/
   test_physics.py             Sprint 1 physics unit tests (10 tests, all passing)
   test_mosfet_doping.py       Sprint 2 doping-profile unit tests (5 tests, all passing)
   test_extraction.py          Sprint 3 extraction unit tests (6 tests, all passing)
+  test_optimization.py        Sprint 4 trade-off scoring unit tests (6 tests, all passing)
 scripts/setup.sh               venv + deps + runs the Sprint 0 smoke test
+docs/optimization.md           Sprint 4 written interpretation (result table + research-question answer)
 ```
 
-## What Sprint 4 needs to do (from `docs/roadmap.md`, restated briefly)
+## What Sprint 5 needs to do (from `docs/roadmap.md`, restated briefly)
 
-Answer the research question from `project_manual.md` §1 using Sprint 3's
-data (`src/optimization/`): a documented, weighted trade-off score
-combining I_ON, I_OFF, and g_m (weights/normalization finalized against
-the *actual* Sprint 3 ranges in `results/processed/{channel_length,
-oxide_thickness,doping}_sweep_metrics.csv` — not chosen in advance), a
-results table comparing baseline vs. every swept configuration against
-that score, and a written interpretation in `docs/` of which
-configuration(s) favor a low-power trade-off and why. Gate: the
-optimization conclusion is fully traceable to Sprint 3 CSV data — no
-numbers introduced that don't come from a saved simulation result. Note
-the doping sweep's usable range is narrower than originally planned (see
-gotcha #8) — the trade-off analysis should draw from the data actually
-gathered (`[7e16, 1e17, 1.5e17]` cm⁻³ for doping), not from the wider
-range named in earlier planning docs.
+Stress-test and package the whole pipeline: a mesh-sensitivity check (does
+refining `mosfet_geometry.py`'s mesh change Sprint 2/3 results
+materially?), parameter-sensitivity/numerical-stability notes (a lot of
+this is already written up as gotchas #4/#7/#8 above and in
+`docs/limitations.md` — Sprint 5 should verify/consolidate, not
+necessarily rediscover), an independent rerun from a clean environment
+(`scripts/setup.sh` + the run scripts) to confirm reproducibility,
+`docs/validation.md`/`docs/limitations.md` fully filled in (both already
+have real content through Sprint 4; Sprint 5 adds its own sections rather
+than starting from scratch), a final figure set in `results/figures/`, and
+`CITATION.cff` + a finalized `requirements.txt`. Gate: a clean clone +
+`scripts/setup.sh` + the run scripts reproduce the Sprint 3/4 headline
+results without manual fixes.
 
 ## Operating reminders for whoever resumes this
 
 - Read `AGENTS.md` — gate discipline (don't skip/compress sprints),
   anti-hallucination rules (verify DEVSIM calls against the installed
-  package before using them, exactly as Sprints 0-3 did), and content
+  package before using them, exactly as Sprints 0-4 did), and content
   rules (no scholarship/portfolio language anywhere in this repo).
 - If this environment's background/long-running shell commands don't
   survive between messages (observed repeatedly during Sprint 3 — `/tmp`
@@ -272,7 +301,14 @@ range named in earlier planning docs.
   `nohup`, wrap anything that might hang in a hard `timeout N` (see
   gotcha #8 — an un-timed retry loop once pinned a CPU core for nearly an
   hour), and don't be surprised if a run needs relaunching after a resume.
-- After Sprint 4's gate passes: record the result in `docs/roadmap.md` and
-  `docs/validation.md` (same style as Sprint 0/1/2/3 above), update this
+  Sprint 4 also hit a variant of this: a stale/orphaned process from an
+  earlier attempt kept running invisibly in the background (reparented to
+  `systemd --user`) while a second attempt was launched on top of it,
+  producing spurious convergence failures from two solves competing for
+  RAM on this 8 GB machine — always check `ps -ef | grep <script name>`
+  for stragglers before trusting a "the process died" signal, and before
+  starting a fresh run.
+- After Sprint 5's gate passes: record the result in `docs/roadmap.md` and
+  `docs/validation.md` (same style as Sprint 0-4 above), update this
   file's "where things stand" section, then tell the user it's safe to
   `/clear`.

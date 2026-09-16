@@ -73,3 +73,14 @@ alone.
   looser `relative_error` per attempt for cases where even `1e-5` isn't
   enough near a genuinely near-zero current. Full gotcha history in
   `docs/HANDOFF.md`.
+- **The Sprint 3 I_OFF noise floor above propagates directly into Sprint
+  4's trade-off score.** `src/optimization/tradeoff.py` min-max-normalizes
+  I_OFF across the 7 simulated configurations; since all 7 I_OFF values
+  sit within the noise floor (varying by under 1 decade, vs. ~6 decades
+  for I_ON), that normalization stretches noise to fill the full scoring
+  range rather than resolving a real leakage difference. The weighted
+  score's ranking is therefore driven almost entirely by I_ON and g_m, not
+  by I_OFF, despite I_OFF carrying the largest weight (0.5) in the score's
+  definition. Full interpretation in `docs/optimization.md`; this is a
+  consequence of the device model having no DIBL/GIDL/punch-through
+  mechanism (see the scope limitation above), not a scoring-code bug.

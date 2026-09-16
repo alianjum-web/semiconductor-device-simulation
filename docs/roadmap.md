@@ -162,7 +162,7 @@ fresh DEVSIM session and confirmed the key metrics matched to `rtol=1e-6`
 
 ## Sprint 4 — Low-power optimization + result synthesis
 
-**Status:** `[ ]`
+**Status:** `[x]`
 
 Goal: answer the research question from `project_manual.md` §1 using the
 Sprint 3 data.
@@ -179,6 +179,29 @@ Deliverables (`src/optimization/`):
 **Gate:** the optimization conclusion is fully traceable to Sprint 3 CSV
 data — no numbers introduced that don't come from a saved simulation
 result.
+
+**Result:** passed. `src/optimization/tradeoff.py` scores every unique
+configuration from Sprint 3's three sweeps (the shared baseline point
+de-duplicated) with `score = 0.3*ion_norm + 0.5*(1-ioff_norm) +
+0.2*gm_norm`, I_ON/I_OFF normalized on a log10 scale (they span several
+decades), g_m linearly, all bounds taken from the actual 7-configuration
+dataset — covered by `tests/test_extraction.py`-style unit tests in
+`tests/test_optimization.py` (6 tests, all passing). Ranking (best to
+worst): t_ox=5e-7 cm (0.8463) > N_A=7e16 (0.8357) > L=5e-5 cm (0.7353) >
+baseline (0.6112) > L=2e-4 cm (0.5347) > t_ox=2e-6 cm (0.3880) >
+N_A=1.5e17 (0.2536). Table: `results/processed/low_power_tradeoff_scores.csv`.
+
+The honest finding, stated fully in `docs/optimization.md`: I_OFF varies
+by less than 1 decade across all 7 configurations and sits entirely
+inside this solver's documented numerical noise floor (`docs/
+limitations.md`), so the score's leakage term does not resolve a real
+physical signal — the ranking above is driven almost entirely by I_ON and
+g_m, which do vary by real, multi-decade margins. This project's
+idealized long-channel device model has no DIBL/GIDL/punch-through
+mechanism, so it has no way to produce a genuine I_ON-vs-I_OFF leakage
+trade-off as L/t_ox/N_A vary — see `docs/optimization.md` for the full
+interpretation and the better-supported answer (t_ox=2e-6 cm, using only
+the two metrics this data actually resolves).
 
 ---
 

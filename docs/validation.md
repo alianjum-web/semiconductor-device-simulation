@@ -199,6 +199,22 @@ a real check, not a formality).
 Mesh sensitivity: not yet checked — deferred to Sprint 5 per
 `docs/roadmap.md`.
 
+## Sprint 4 — Low-power trade-off scoring
+
+Status: **passed.** Run via `src/optimization/tradeoff.py`.
+
+Combines I_ON, I_OFF, and g_m from Sprint 3's 7 unique configurations
+(baseline plus two swept values each for L, t_ox, N_A) into one weighted,
+normalized score per configuration. See `docs/optimization.md` for the
+full method, result table, and written interpretation — not duplicated
+here per this file's own convention of linking rather than restating.
+Headline finding: I_ON and g_m vary by real, multi-decade margins across
+the sweeps and drive the ranking; I_OFF varies by under 1 decade, inside
+this solver's documented numerical noise floor, so the score's leakage
+term does not resolve a physically real signal. Output:
+`results/processed/low_power_tradeoff_scores.csv`. Tests:
+`tests/test_optimization.py` (6 tests, all passing).
+
 ## Sprint 5 — Mesh and parameter sensitivity
 
 Status: not yet run.
